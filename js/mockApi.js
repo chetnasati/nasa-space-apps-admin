@@ -1,6 +1,6 @@
 // NASA Space Apps 2026 - Simulated REST API Handlers
 
-import { validateRegistrationPayload, checkDuplicates, RateLimiter } from './zodValidation.js';
+import { validateFullRegistrationPayload, checkDatabaseDuplicates, RateLimiter } from './zodValidation.js';
 
 export class MockAPIService {
     constructor(teamsState, statsState) {
@@ -82,7 +82,7 @@ export class MockAPIService {
                 teamName: team.teamName,
                 leaderName: team.leaderName,
                 category: team.category,
-                institution: team.institution,
+                institution: team.institution || team.institutionName,
                 badgeUrl: `/id-card/${team.id}`,
                 issuedStatus: team.idCardIssued ? "ISSUED" : "PENDING_REISSUE",
                 securityToken: `NASA-SEC-2026-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
@@ -105,7 +105,7 @@ export class MockAPIService {
         }
 
         // Zod Validation
-        const validation = validateRegistrationPayload(payload);
+        const validation = validateFullRegistrationPayload(payload, this.teams);
         if (!validation.isValid) {
             return {
                 status: 400,
@@ -116,34 +116,31 @@ export class MockAPIService {
             };
         }
 
-        // Duplicate Detection
-        const dupCheck = checkDuplicates(validation.sanitizedData, this.teams);
-        
-        const newId = `REG-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+        const newId = `NASA2026-BIAS-${Math.floor(1000 + Math.random() * 9000)}`;
         const newTeam = {
             id: newId,
             teamName: validation.sanitizedData.teamName,
-            category: validation.sanitizedData.category,
-            institution: validation.sanitizedData.institution,
+            category: validation.sanitizedData.category || "College",
+            institution: validation.sanitizedData.institutionName || validation.sanitizedData.institution,
+            institutionName: validation.sanitizedData.institutionName || validation.sanitizedData.institution,
             leaderName: validation.sanitizedData.leaderName,
             leaderEmail: validation.sanitizedData.leaderEmail,
-            phone: validation.sanitizedData.phone,
-            membersCount: 1,
-            members: [
+            phone: validation.sanitizedData.leaderMobile,
+            membersCount: validation.sanitizedData.teamSize || 4,
+            members: validation.sanitizedData.members || [
                 {
                     name: validation.sanitizedData.leaderName,
                     role: "Team Leader",
                     email: validation.sanitizedData.leaderEmail,
-                    phone: validation.sanitizedData.phone
+                    phone: validation.sanitizedData.leaderMobile
                 }
             ],
-            challenge: validation.sanitizedData.challenge,
+            challenge: validation.sanitizedData.challenge || "Space Innovation",
             registrationDate: new Date().toISOString().split('T')[0],
-            status: dupCheck.hasDuplicate ? "Flagged" : "Approved",
-            isDuplicate: dupCheck.hasDuplicate,
-            duplicateReason: dupCheck.hasDuplicate ? dupCheck.matches[0].reason : null,
-            idCardIssued: !dupCheck.hasDuplicate,
-            issueDate: dupCheck.hasDuplicate ? null : new Date().toISOString().split('T')[0]
+            status: "Approved",
+            isDuplicate: false,
+            idCardIssued: true,
+            issueDate: new Date().toISOString().split('T')[0]
         };
 
         this.teams.unshift(newTeam);
@@ -152,8 +149,9 @@ export class MockAPIService {
             status: 201,
             statusText: "Created",
             timeMs: 35,
-            message: dupCheck.hasDuplicate ? "Team created but FLAGGED for Duplicate Email/Phone." : "Registration successful!",
+            message: "Registration successful!",
             data: newTeam
         };
     }
 }
+
